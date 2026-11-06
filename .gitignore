@@ -1,65 +1,43 @@
-cat > .gitignore <<'EOF'
-# Environment variables and secrets
-.env
-.env.*
-!.env.example
-!.env.*.example
+# Environment files - all directories
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.*.example
 
-# Node.js dependencies
-node_modules/
+# Node dependencies
 **/node_modules/
 
-# Package manager logs
-npm-debug.log*
-yarn-debug.log*
-pnpm-debug.log*
-lerna-debug.log*
-
 # Build outputs
-dist/
-build/
-out/
-.next/
-.nuxt/
-.output/
-coverage/
+**/dist/
+**/build/
+**/coverage/
+**/.next/
+**/.nuxt/
+**/.output/
 
-# Framework caches
-.cache/
-.turbo/
-.parcel-cache/
-.vite/
-.eslintcache/
-*.tsbuildinfo
+# Caches
+**/.cache/
+**/.turbo/
+**/.vite/
 
 # Logs
-logs/
-*.log
+**/*.log
+**/logs/
 
 # Temporary files
-tmp/
-temp/
+**/tmp/
+**/temp/
 *.tmp
-*.temp
-*.swp
-*.swo
+
+# IDE
+.vscode/
+.idea/
+
+# OS
 .DS_Store
 Thumbs.db
 
-# IDE and editor
-.vscode/
-.idea/
-*.iml
-
-# Testing
-.nyc_output/
-playwright-report/
-test-results/
-
-# Docker
-.docker/
-
-# Local databases and data
+# Local databases
 *.sqlite
 *.sqlite3
 *.db
@@ -67,10 +45,5 @@ test-results/
 # Certificates and private keys
 *.pem
 *.key
-*.crt
 *.p12
 *.pfx
-
-# OS files
-.Trash-*
-EOF
