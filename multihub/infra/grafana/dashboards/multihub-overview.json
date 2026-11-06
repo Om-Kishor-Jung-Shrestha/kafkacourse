@@ -1,0 +1,101 @@
+{
+  "title": "MultiHub Overview",
+  "uid": "multihub-overview",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "time": { "from": "now-1h", "to": "now" },
+  "refresh": "10s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "HTTP requests/sec by route",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum by (route, status_code) (rate(multihub_http_requests_total[1m]))",
+          "legendFormat": "{{route}} [{{status_code}}]"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "HTTP request duration p95 (ms)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, route) (rate(multihub_http_request_duration_ms_bucket[5m])))",
+          "legendFormat": "{{route}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Outbox events published/sec (by topic)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum by (topic) (rate(multihub_outbox_events_published_total[1m]))",
+          "legendFormat": "{{topic}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Dapr publish duration p95 (ms, by component)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, component) (rate(multihub_dapr_publish_duration_ms_bucket[5m])))",
+          "legendFormat": "{{component}}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Recommendation compute duration p95 (ms)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(multihub_recommendation_compute_duration_ms_bucket[5m])))",
+          "legendFormat": "p95"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Emails sent/sec (by template)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum by (template) (rate(multihub_emails_sent_total[5m]))",
+          "legendFormat": "{{template}}"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Backend logs (live, via Pino -> Docker -> Promtail -> Loki)",
+      "type": "logs",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 24 },
+      "datasource": "Loki",
+      "targets": [
+        {
+          "expr": "{compose_service=\"backend\"}"
+        }
+      ]
+    }
+  ]
+}

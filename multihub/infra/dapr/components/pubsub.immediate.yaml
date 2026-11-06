@@ -1,0 +1,23 @@
+# Redis Streams — low-latency pub/sub for notifications, cache invalidation,
+# progress updates (blueprint §13.1). Runs inside the docker-compose network,
+# so daprd (the sidecar container) reaches Redis via the service name "redis".
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: pubsub.immediate
+spec:
+  type: pubsub.redis
+  version: v1
+  metadata:
+    - name: redisHost
+      value: redis:6379
+    - name: redisPassword
+      value: ""
+    - name: consumerID
+      value: "multihub-backend"
+    - name: processingTimeout
+      value: "60000"
+    - name: maxRetries
+      value: "3"
+scopes:
+  - multihub-backend

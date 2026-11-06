@@ -1,0 +1,29 @@
+# Tails every container's Docker logs (via the Docker API, auto-discovering
+# new containers every 5s) and ships them to Loki. This is how Pino's JSON
+# logs get "sent to Loki": Pino writes structured JSON to stdout -> Docker
+# captures it as the container's log stream -> Promtail reads that stream
+# here -> pushes to Loki -> queryable/visualizable in Grafana. No direct
+# Loki transport inside the Node process needed.
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: docker-containers
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+    relabel_configs:
+      - source_labels: ["__meta_docker_container_name"]
+        regex: "/(.*)"
+        target_label: "container"
+      - source_labels: ["__meta_docker_container_label_com_docker_compose_service"]
+        target_label: "compose_service"
+      - source_labels: ["__meta_docker_container_log_stream"]
+        target_label: "stream"

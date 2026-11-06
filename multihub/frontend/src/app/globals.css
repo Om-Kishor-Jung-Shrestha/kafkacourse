@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html { scroll-behavior: smooth; }
+body { background: #fff; color: #1c1d1f; -webkit-font-smoothing: antialiased; }
+
+@layer components {
+  .container-x { @apply mx-auto w-full max-w-[1340px] px-4 sm:px-6 lg:px-10; }
+  .btn { @apply inline-flex items-center justify-center gap-2 font-bold text-sm px-4 py-2.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed select-none; }
+  .btn-primary { @apply btn bg-primary text-white hover:bg-primary-hover; }
+  .btn-dark { @apply btn bg-ink text-white hover:bg-ink-soft; }
+  .btn-outline { @apply btn border border-ink text-ink hover:bg-surface; }
+  .btn-ghost { @apply btn text-ink hover:bg-surface; }
+  .btn-danger { @apply btn bg-error text-white hover:bg-red-700; }
+  .input { @apply w-full border border-ink/70 bg-white px-3 py-2.5 text-sm placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary; }
+  .label { @apply block text-sm font-bold mb-1.5; }
+  .card { @apply bg-white border border-border; }
+  .h-section { @apply text-2xl font-bold tracking-tight; }
+  .skeleton { @apply relative overflow-hidden bg-gray-200 rounded-sm; }
+  .skeleton::after { content: ''; @apply absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/60 to-transparent animate-shimmer; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+}

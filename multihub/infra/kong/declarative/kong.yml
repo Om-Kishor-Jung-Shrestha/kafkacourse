@@ -1,0 +1,72 @@
+_format_version: "3.0"
+_transform: true
+
+# Kong's role here is strictly the backend's API gateway — it does not
+# route to or know about the frontend at all (that's a separate concern,
+# handled by its own dedicated Nginx container, `frontend-nginx`, see
+# infra/nginx/frontend.conf). The frontend calls the backend THROUGH Kong
+# (NEXT_PUBLIC_API_URL / API_GATEWAY_URL both point at Kong's proxy port),
+# never directly.
+
+services:
+  - name: multihub-backend
+    url: http://backend:3001
+    routes:
+      - name: multihub-api-route
+        paths:
+          - /api
+        strip_path: false
+        preserve_host: false
+    plugins:
+      - name: cors
+        config:
+          origins:
+            - "http://localhost"
+            - "http://localhost:80"
+            - "http://localhost:8000"
+            - "http://localhost:3000"
+          methods:
+            - GET
+            - POST
+            - PATCH
+            - PUT
+            - DELETE
+            - OPTIONS
+          headers:
+            - Authorization
+            - Content-Type
+            - X-Idempotency-Key
+          exposed_headers:
+            - Authorization
+          credentials: true
+          max_age: 3600
+      - name: rate-limiting
+        config:
+          minute: 200
+          policy: local
+      - name: request-size-limiting
+        config:
+          allowed_payload_size: 10
+
+  - name: multihub-dapr-debug
+    url: http://backend:3001
+    routes:
+      - name: multihub-dapr-route
+        paths:
+          - /dapr
+        strip_path: false
+    # Exposed through Kong purely so `GET /dapr/subscribe` is inspectable
+    # via the gateway during development. The real Dapr sidecar calls the
+    # backend directly on its app port (shared network namespace), not
+    # through Kong, for message delivery.
+
+plugins:
+  # Global (not tied to a service/route) — exposes Kong's own request/
+  # latency/bandwidth metrics at GET :8001/metrics for Prometheus to scrape
+  # (see infra/prometheus/prometheus.yml, job "kong").
+  - name: prometheus
+    config:
+      status_code_metrics: true
+      latency_metrics: true
+      bandwidth_metrics: true
+      upstream_health_metrics: true

@@ -1,0 +1,22 @@
+# Kafka — durable, replayable pub/sub for everything that needs long
+# retention: audit trail, projections, analytics, email (blueprint §13.2).
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: pubsub.durable
+spec:
+  type: pubsub.kafka
+  version: v1
+  metadata:
+    - name: brokers
+      value: "kafka:9092"
+    - name: consumerGroup
+      value: "multihub-backend-group"
+    - name: clientID
+      value: "multihub-backend"
+    - name: authRequired
+      value: "false"
+    - name: initialOffset
+      value: "oldest"
+scopes:
+  - multihub-backend

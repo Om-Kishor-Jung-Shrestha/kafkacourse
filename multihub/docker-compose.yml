@@ -1,0 +1,470 @@
+# Full local stack: Postgres (behind PgBouncer for app connection pooling),
+# Redis (also backs BullMQ + Dapr Redis Streams), Kafka (KRaft, no
+# Zookeeper), a Dapr placement service + per-app Dapr sidecar (Redis
+# Streams = pubsub.immediate, Kafka = pubsub.durable), Kong as THE primary
+# entry point (fronting both the Next.js frontend and the NestJS API, with
+# Nginx-level performance tuning injected directly into kong.conf), MailHog
+# as a local SMTP catcher, and a full observability stack: Prometheus
+# (metrics) + Loki (logs) + Promtail (log shipper) + Grafana (dashboards)
+# — all dockerized, all wired to the backend's Pino JSON logs and
+# prom-client metrics out of the box.
+#
+# Run everything with:  docker compose up --build
+# Primary entry point (Kong -> {frontend, backend}): http://localhost/  (or :8000)
+# Kong Admin API:      http://localhost:8001
+# Static assets (raw Nginx, bypasses Kong's Lua layer): http://localhost:8088/static/
+# API direct, bypassing Kong entirely: http://localhost:3001/api/...
+# Backend Prometheus metrics: http://localhost:3001/metrics
+# Prometheus UI:  http://localhost:9090
+# Loki API:       http://localhost:3100
+# Grafana:        http://localhost:3300  (admin/admin, or anonymous Viewer)
+# MailHog UI: http://localhost:8025
+# Kafka UI:    http://localhost:8090
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: multihub_dev
+    ports: ["5433:5432"] # host 5433 -> avoids clashing with a locally-installed Postgres (which defaults to 5432)
+    volumes: ["postgres_data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      retries: 10
+    networks: [multihub]
+
+  # Connection pooler in front of Postgres (transaction pooling mode) —
+  # the app's runtime queries (DATABASE_URL) go through here; Prisma
+  # schema operations (migrate/db push) use DIRECT_DATABASE_URL to talk
+  # straight to `postgres` instead, since transaction-mode PgBouncer
+  # doesn't support the prepared statements those commands need (see
+  # backend/prisma/schema.prisma's `directUrl`).
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: multihub_dev
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: "100"
+      DEFAULT_POOL_SIZE: "25"
+      # NOT "trust": the edoburu entrypoint only writes the plaintext password
+      # into userlist.txt when AUTH_TYPE is plain/scram-sha-256; for anything
+      # else (incl. trust) it writes an MD5 hash, which PgBouncer cannot use to
+      # log in to Postgres 16's SCRAM auth -> "server login failed: wrong
+      # password type". With "plain", PgBouncer holds the real password and
+      # does SCRAM to Postgres itself.
+      AUTH_TYPE: plain
+    ports: ["16432:5432"] # host 16432 -> debugging access only; internally always reachable as pgbouncer:5432
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -p 5432 -U postgres -d multihub_dev || exit 1"]
+      interval: 5s
+      retries: 10
+      start_period: 10s
+    networks: [multihub]
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    ports: ["6380:6379"] # host 6380 -> avoids clashing with a locally-installed Redis (which defaults to 6379)
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+    networks: [multihub]
+
+  mailhog:
+    image: mailhog/mailhog
+    ports: ["1025:1025", "8025:8025"]
+    networks: [multihub]
+
+  # Single-node Kafka in KRaft mode (no Zookeeper needed), using the
+  # official Apache Kafka image. Backs the pubsub.durable Dapr component
+  # for long-retention, replayable events (audit trail, projections,
+  # analytics, email — blueprint §13.2/§27).
+  #
+  # NOTE: we deliberately do NOT use bitnami/kafka — Bitnami has been
+  # aggressively deprecating older fixed-version tags (e.g. "3.7" started
+  # returning "not found" on Docker Hub), which breaks reproducibility.
+  # apache/kafka is published directly by the Apache Kafka project and
+  # pinned to an exact version.
+  #
+  # CLUSTER_ID is pinned explicitly (must be a fixed 22-char base64
+  # string) so the broker doesn't fail to start on image versions that
+  # require one to be provided rather than auto-generated.
+  #
+  # No named volume here on purpose: this image runs as a non-root user
+  # (uid 1000), and a fresh Docker-managed named volume is created
+  # root-owned, which makes KRaft's storage-format step fail while writing
+  # meta.properties ("Error while writing meta properties file ...
+  # bootstrap.checkpoint.tmp"). Using the container's own (correctly-owned,
+  # image-layer) filesystem instead avoids that entirely — fine for local
+  # dev, since topics here are just demo data that doesn't need to survive
+  # `docker compose down`.
+  kafka:
+    image: apache/kafka:3.7.0
+    environment:
+      KAFKA_NODE_ID: "1"
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
+      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+      # Single broker: the internal topics default to replication factor 3,
+      # so __consumer_offsets could never be created ("Offset's topic has not
+      # yet been created") and Dapr's Kafka consumer looped forever.
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+    ports: ["19092:9092"] # host 19092 -> avoids clashing with any other local/dockerized Kafka on the standard 9092
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 20s
+    networks: [multihub]
+
+  # Web UI for browsing Kafka topics/messages/consumer groups: http://localhost:8090
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    environment:
+      KAFKA_CLUSTERS_0_NAME: multihub-local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      DYNAMIC_CONFIG_ENABLED: "true"
+    ports:
+      - "8090:8080" # host 8090 -> UI (8080 is commonly taken)
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks: [multihub]
+
+  dapr-placement:
+    image: daprio/dapr:1.14.4
+    command: ["./placement", "-port", "50006"]
+    ports: ["50006:50006"]
+    networks: [multihub]
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    environment:
+      NODE_ENV: development
+      PORT: "3001"
+      SERVICE_NAME: multihub-backend
+      # Runtime queries -> PgBouncer (pooled). Schema ops (migrate/db push)
+      # automatically use DIRECT_DATABASE_URL instead (see schema.prisma).
+      DATABASE_URL: "postgresql://postgres:postgres@pgbouncer:5432/multihub_dev?connection_limit=25&pool_timeout=10&pgbouncer=true"
+      DIRECT_DATABASE_URL: postgresql://postgres:postgres@postgres:5432/multihub_dev
+      REDIS_URL: redis://redis:6379
+      JWT_ACCESS_SECRET: dev_access_secret_min_32_chars_xxxxxxx
+      JWT_ACCESS_EXPIRES_IN: 15m
+      JWT_REFRESH_SECRET: dev_refresh_secret_min_32_chars_xxxxxx
+      JWT_REFRESH_EXPIRES_IN: 7d
+      SMTP_HOST: "${SMTP_HOST:-mailhog}"
+      SMTP_PORT: "${SMTP_PORT:-1025}"
+      SMTP_SECURE: "${SMTP_SECURE:-false}"
+      # Leave both blank to keep using MailHog (no auth needed). Set both to
+      # send through a real provider (Gmail, SendGrid, etc) instead.
+      SMTP_USER: "${SMTP_USER:-}"
+      SMTP_PASS: "${SMTP_PASS:-}"
+      SMTP_FROM_EMAIL: "${SMTP_FROM_EMAIL:-noreply@multihub.dev}"
+      SMTP_FROM_NAME: "${SMTP_FROM_NAME:-MultiHub}"
+      FRONTEND_URL: http://localhost
+      # Used to build backend-API links (e.g. the mock-checkout completion
+      # URL) — points at Kong directly rather than :80 (frontend-nginx),
+      # since this is API traffic, not something a user browses to.
+      BASE_URL: http://localhost:8000
+      PLATFORM_COMMISSION_PERCENT: "30"
+      DICTIONARY_VERSION: "1"
+      ADMIN_INVITE_EXPIRATION_HOURS: "24"
+      DAPR_ENABLED: "true"
+      DAPR_HTTP_PORT: "3500"
+      DAPR_GRPC_PORT: "50001"
+      DAPR_APP_ID: multihub-backend
+      LOG_LEVEL: info
+      LOG_PRETTY: "true"
+      METRICS_ENABLED: "true"
+      BULLMQ_CONCURRENCY: "2"
+      OUTBOX_POLL_INTERVAL_MS: "500"
+      OUTBOX_BATCH_SIZE: "50"
+      # ── Google OAuth — leave blank to keep Google sign-in disabled
+      # (the UI hides the button, /api/auth/google returns a clean 503).
+      # Get these from https://console.cloud.google.com/apis/credentials
+      GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID:-}"
+      GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET:-}"
+      GOOGLE_CALLBACK_URL: "${GOOGLE_CALLBACK_URL:-http://localhost:3001/api/auth/google/callback}"
+      # ── Stripe — leave blank to keep the local mock-checkout flow
+      # (no real card details / Stripe account needed to try purchases).
+      STRIPE_SECRET_KEY: "${STRIPE_SECRET_KEY:-}"
+      STRIPE_WEBHOOK_SECRET: "${STRIPE_WEBHOOK_SECRET:-}"
+      # ── Storage strategy (RULE-12) — local by default, no setup needed.
+      STORAGE_STRATEGY: "${STORAGE_STRATEGY:-local}"
+      LOCAL_UPLOAD_PATH: ./uploads
+      CLOUDINARY_CLOUD_NAME: "${CLOUDINARY_CLOUD_NAME:-}"
+      CLOUDINARY_API_KEY: "${CLOUDINARY_API_KEY:-}"
+      CLOUDINARY_API_SECRET: "${CLOUDINARY_API_SECRET:-}"
+      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID:-}"
+      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY:-}"
+      AWS_S3_REGION: "${AWS_S3_REGION:-us-east-1}"
+      AWS_S3_BUCKET: "${AWS_S3_BUCKET:-}"
+      # ── OpenTelemetry — off by default (no otel-collector round-trip
+      # cost unless you want traces); flip to "true" to enable.
+      OTEL_ENABLED: "${OTEL_ENABLED:-false}"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: multihub-backend
+    ports:
+      - "3001:3001" # NestJS app (direct, bypassing Kong)
+      - "3500:3500" # Dapr HTTP (shared network namespace with backend-dapr)
+      - "50001:50001" # Dapr gRPC
+    volumes:
+      - ./backend:/app
+      - backend_node_modules:/app/node_modules
+      - backend_uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      pgbouncer:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:3001/api/courses || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s # entrypoint runs `prisma db push` + seed, then NestJS watch-mode compiles before listening
+    networks: [multihub]
+
+  # Dapr sidecar for the backend. network_mode: service:backend attaches it
+  # to the backend container's network namespace so: (a) daprd can reach the
+  # app on localhost:3001, and (b) the app can reach daprd on localhost:3500
+  # — which is exactly what backend/src/common/events/event-bus.service.ts
+  # calls to publish through Redis Streams / Kafka.
+  backend-dapr:
+    image: daprio/daprd:1.14.4
+    network_mode: "service:backend"
+    command:
+      [
+        "./daprd",
+        "-app-id", "multihub-backend",
+        "-app-port", "3001",
+        "-dapr-http-port", "3500",
+        "-dapr-grpc-port", "50001",
+        "-placement-host-address", "dapr-placement:50006",
+        "-resources-path", "/components",
+        "-config", "/config/appconfig.yaml",
+        "-log-level", "info",
+      ]
+    volumes:
+      - ./infra/dapr/components:/components
+      - ./infra/dapr/configuration:/config
+    depends_on:
+      - backend
+      - dapr-placement
+      - redis
+      - kafka
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    environment:
+      # frontend-nginx (port 80, serving the app) and Kong (port 8000, the
+      # API gateway) are separate containers/origins now, so the browser
+      # needs an absolute URL to reach the API — Kong's CORS config
+      # (infra/kong/declarative/kong.yml) explicitly allows this origin.
+      NEXT_PUBLIC_API_URL: "http://localhost:8000"
+      # Informational only — the actual Google OAuth flow is entirely
+      # server-driven (the "Continue with Google" button just links to
+      # GET /api/auth/google, and the backend handles the whole redirect
+      # dance using GOOGLE_CLIENT_ID/SECRET). Reserved here for a future
+      # client-side Google Identity Services (One Tap) integration.
+      NEXT_PUBLIC_GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID:-}"
+      # Informational only — checkout uses Stripe's hosted Checkout page
+      # (redirect-based), which doesn't need the publishable key on the
+      # frontend. Reserved for a future Stripe.js/Elements integration.
+      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: "${STRIPE_PUBLISHABLE_KEY:-}"
+      # Server-side only (no NEXT_PUBLIC_ prefix — never reaches the
+      # browser bundle). Used by next.config.ts's `rewrites()` to proxy
+      # /api/* through Kong (the API gateway) rather than straight to the
+      # backend — keeps "frontend talks to backend only via Kong" true for
+      # server-side requests too, not just client-side ones.
+      API_GATEWAY_URL: http://kong:8000
+      NEXT_TELEMETRY_DISABLED: "1"
+    ports:
+      - "3000:3000" # direct access, bypassing frontend-nginx (debugging only)
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:3000/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks: [multihub]
+
+  # Kong's ONLY job now is being the backend's API gateway — it does not
+  # know the frontend exists (see infra/kong/declarative/kong.yml, which
+  # only defines the `multihub-backend` service/route + a debug /dapr
+  # route). Port 80 belongs to `frontend-nginx` below instead.
+  kong:
+    image: kong:3.7
+    environment:
+      # Redundant with kong.conf on purpose: these are read by the image's
+      # own entrypoint preflight checks (e.g. to skip waiting on a database)
+      # before `kong start --conf ...` even runs, so the container can't get
+      # stuck waiting on a Postgres connection that will never come.
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /kong/declarative/kong.yml
+    command: ["kong", "start", "--conf", "/etc/kong/kong.conf"]
+    volumes:
+      - ./infra/kong/kong.conf:/etc/kong/kong.conf:ro
+      - ./infra/kong/declarative/kong.yml:/kong/declarative/kong.yml:ro
+      - ./infra/kong/nginx/custom.conf:/kong/nginx/custom.conf:ro
+      - ./infra/kong/static:/kong/static:ro
+    ports:
+      - "8000:8000" # Kong proxy — the API gateway; the frontend calls this, not the backend directly
+      - "8001:8001" # Kong Admin API
+      - "8088:8088" # raw static-content Nginx server (nginx_http_include)
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "kong health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    networks: [multihub]
+
+  # Dedicated Nginx whose ONLY job is serving the frontend (infra/nginx/frontend.conf)
+  # — the primary entry point for the app. Doesn't know about the backend
+  # or Kong at all; the frontend's own code calls the API through Kong
+  # (see NEXT_PUBLIC_API_URL / API_GATEWAY_URL below).
+  frontend-nginx:
+    image: nginx:alpine
+    volumes:
+      - ./infra/nginx/frontend.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "80:80" # primary entry point: http://localhost/
+    depends_on:
+      frontend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:80/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks: [multihub]
+
+  # ── Observability stack ──────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=7d"
+    ports:
+      - "9090:9090" # Prometheus UI
+    depends_on:
+      - backend
+      - kong
+    networks: [multihub]
+
+  loki:
+    image: grafana/loki:latest
+    command: ["-config.file=/etc/loki/loki-config.yml"]
+    volumes:
+      - ./infra/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki_data:/loki
+    ports:
+      - "3100:3100"
+    networks: [multihub]
+
+  # Reads every container's Docker log stream (backend, frontend, kong,
+  # postgres, etc — all of which include the backend's Pino JSON output)
+  # and ships it to Loki. This is the "Pino logs properly sent to Loki"
+  # pipeline: Pino -> stdout -> Docker log driver -> Promtail -> Loki.
+  promtail:
+    image: grafana/promtail:latest
+    command: ["-config.file=/etc/promtail/promtail-config.yml"]
+    volumes:
+      - ./infra/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - loki
+    networks: [multihub]
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3300:3000" # Grafana UI (3000 is already used by the frontend)
+    depends_on:
+      - prometheus
+      - loki
+    networks: [multihub]
+
+  # OpenTelemetry Collector — receives traces from the backend when
+  # OTEL_ENABLED=true and logs them (see infra/otel/otel-collector-config.yaml).
+  # Harmless to leave running even with tracing disabled; it just sits idle.
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./infra/otel/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
+    ports:
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP
+    networks: [multihub]
+
+networks:
+  # Pinned to a distinctive subnet (Docker's default auto-allocated pool is
+  # 172.17.0.0/16 upward, and running many docker-compose projects can
+  # exhaust or collide across that range) — reduces the chance of this
+  # project's network clashing with another one already running.
+  multihub:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+volumes:
+  postgres_data:
+  backend_node_modules:
+  frontend_node_modules:
+  backend_uploads:
+  prometheus_data:
+  loki_data:
+  grafana_data:

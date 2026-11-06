@@ -1,0 +1,486 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  // Runtime queries go through DATABASE_URL — PgBouncer in the Dockerized
+  // stack (connection pooling, transaction mode). Schema operations
+  // (`prisma migrate`, `prisma db push`) automatically use `directUrl`
+  // instead, bypassing the pooler, because transaction-mode PgBouncer
+  // doesn't support the prepared statements those commands need.
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
+}
+
+// ═══════════════════════════════════════════════════════
+// ENUMS
+// ═══════════════════════════════════════════════════════
+enum UserRole {
+  USER
+  CREATOR
+  ADMIN
+  SUPERADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  BANNED
+}
+
+enum AuthProvider {
+  EMAIL
+  GOOGLE
+  BOTH
+}
+
+enum CourseLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+  ALL_LEVELS
+}
+
+enum CourseStatus {
+  DRAFT
+  PENDING_REVIEW
+  PUBLISHED
+  REJECTED
+  ARCHIVED
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  COMPLETED
+  DROPPED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum PayoutStatus {
+  PENDING
+  PROCESSED
+  FAILED
+}
+
+enum NotificationType {
+  SYSTEM
+  COURSE_UPDATE
+  ENROLLMENT
+  PAYMENT
+  REVIEW
+  PROMOTION
+}
+
+enum OtpPurpose {
+  REGISTRATION
+  LOGIN
+  PASSWORD_RESET
+  EMAIL_CHANGE
+  ADMIN_INVITE
+}
+
+enum StorageType {
+  LOCAL_FILE
+  CLOUDINARY_FILE
+  S3_FILE
+  EXTERNAL_LINK
+}
+
+enum StorageCategory {
+  PROFILE
+  COURSE_THUMBNAIL
+  COURSE_VIDEO
+  COURSE_RESOURCE
+  CERTIFICATE
+}
+
+// ═══════════════════════════════════════════════════════
+// WRITE MODELS — NORMALIZED
+// ═══════════════════════════════════════════════════════
+model User {
+  id               String       @id @default(cuid())
+  email            String       @unique @db.VarChar(254)
+  password         String?      @db.VarChar(255)
+  firstName        String?      @db.VarChar(60)
+  lastName         String?      @db.VarChar(60)
+  avatarUrl        String?      @db.VarChar(500)
+  avatarStorage    StorageType?
+  role             UserRole     @default(USER)
+  status           UserStatus   @default(ACTIVE)
+  statusReason     String?      @db.VarChar(500)
+  isEmailVerified  Boolean      @default(false)
+  authProvider     AuthProvider @default(EMAIL)
+  googleId         String?      @unique
+  lastLoginAt      DateTime?
+  lastLoginIp      String?      @db.VarChar(45)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  refreshTokens  RefreshToken[]
+  courses        Course[]
+  enrollments    Enrollment[]
+  reviews        Review[]
+  notifications  Notification[]
+  payouts        Payout[]
+  lessonProgress UserLessonProgress[]
+
+  @@index([email])
+  @@index([role, status])
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique @db.VarChar(255)
+  family    String   @db.VarChar(100)
+  revoked   Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+}
+
+model OtpCode {
+  id        String     @id @default(cuid())
+  email     String     @db.VarChar(254)
+  codeHash  String     @db.VarChar(255)
+  purpose   OtpPurpose
+  expiresAt DateTime
+  used      Boolean    @default(false)
+  createdAt DateTime   @default(now())
+  @@index([email, purpose])
+}
+
+model Course {
+  id               String       @id @default(cuid())
+  creatorId        String
+  title            String       @db.VarChar(200)
+  slug             String       @unique @db.VarChar(220)
+  subtitle         String?      @db.VarChar(200)
+  description      String       @db.Text
+  learningOutcomes String[]     @default([])
+  requirements     String[]     @default([])
+  thumbnailUrl     String?      @db.VarChar(500)
+  thumbnailStorage StorageType?
+  priceCents       Int          @default(0)
+  status           CourseStatus @default(DRAFT)
+  level            CourseLevel  @default(BEGINNER)
+  category         String       @db.VarChar(80)
+  tags             String[]     @default([])
+  language         String       @db.VarChar(10) @default("en")
+  isFeatured       Boolean      @default(false)
+  rejectionReason  String?      @db.VarChar(500)
+  publishedAt      DateTime?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  creator     User            @relation(fields: [creatorId], references: [id])
+  sections    CourseSection[]
+  enrollments Enrollment[]
+  reviews     Review[]
+  resources   Resource[]
+
+  @@index([creatorId])
+  @@index([status])
+  @@index([category])
+  @@index([slug])
+}
+
+model Resource {
+  id        String          @id @default(cuid())
+  courseId  String
+  name      String          @db.VarChar(200)
+  url       String          @db.VarChar(500)
+  fileKey   String?
+  storage   StorageType?
+  category  StorageCategory @default(COURSE_RESOURCE)
+  mimeType  String?         @db.VarChar(100)
+  sizeBytes Int?
+  createdAt DateTime        @default(now())
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  @@index([courseId])
+}
+
+model CourseSection {
+  id        String         @id @default(cuid())
+  courseId  String
+  title     String         @db.VarChar(200)
+  order     Int
+  createdAt DateTime       @default(now())
+  course  Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons CourseLesson[]
+  @@unique([courseId, order])
+}
+
+model CourseLesson {
+  id              String       @id @default(cuid())
+  sectionId       String
+  title           String       @db.VarChar(200)
+  content         String?      @db.Text
+  videoUrl        String?      @db.VarChar(500)
+  durationSeconds Int          @default(0)
+  order           Int
+  isPublished     Boolean      @default(false)
+  createdAt       DateTime     @default(now())
+  section      CourseSection        @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  userProgress UserLessonProgress[]
+}
+
+model Enrollment {
+  id          String           @id @default(cuid())
+  userId      String
+  courseId    String
+  status      EnrollmentStatus @default(ACTIVE)
+  progress    Float            @default(0)
+  enrolledAt  DateTime         @default(now())
+  completedAt DateTime?
+  createdAt   DateTime         @default(now())
+
+  user           User                 @relation(fields: [userId], references: [id])
+  course         Course               @relation(fields: [courseId], references: [id])
+  lessonProgress UserLessonProgress[]
+
+  @@unique([userId, courseId])
+  @@index([userId])
+  @@index([courseId])
+}
+
+model UserLessonProgress {
+  id           String     @id @default(cuid())
+  userId       String
+  lessonId     String
+  enrollmentId String
+  isCompleted  Boolean    @default(false)
+  completedAt  DateTime?
+  createdAt    DateTime   @default(now())
+  user       User         @relation(fields: [userId], references: [id])
+  lesson     CourseLesson @relation(fields: [lessonId], references: [id])
+  enrollment Enrollment   @relation(fields: [enrollmentId], references: [id])
+  @@unique([userId, lessonId])
+}
+
+model Payment {
+  id              String        @id @default(cuid())
+  userId          String
+  courseId        String
+  amountCents     Int
+  currency        String        @db.VarChar(3)
+  status          PaymentStatus @default(PENDING)
+  stripeSessionId String?       @unique
+  orderId         String?
+  couponCode      String?       @db.VarChar(50)
+  discountCents   Int           @default(0)
+  paidAt          DateTime?
+  refundedAt      DateTime?
+  createdAt       DateTime      @default(now())
+  @@index([userId])
+  @@index([courseId])
+  @@index([status])
+  @@index([orderId])
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  userId    String
+  courseId  String
+  rating    Int
+  comment   String?  @db.VarChar(1000)
+  createdAt DateTime @default(now())
+  user   User   @relation(fields: [userId], references: [id])
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  @@unique([userId, courseId])
+  @@index([courseId])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String           @db.VarChar(200)
+  message   String           @db.VarChar(1000)
+  metadata  Json?
+  isRead    Boolean          @default(false)
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, isRead])
+}
+
+model Payout {
+  id            String       @id @default(cuid())
+  creatorId     String
+  amountCents   Int
+  currency      String       @db.VarChar(3)
+  status        PayoutStatus @default(PENDING)
+  payoutMethod  String?      @db.VarChar(100)
+  adminNotes    String?      @db.VarChar(500)
+  requestedAt   DateTime     @default(now())
+  processedAt   DateTime?
+  creator User @relation(fields: [creatorId], references: [id])
+  @@index([creatorId])
+  @@index([status])
+}
+
+model OutboxEvent {
+  id            String    @id @default(cuid())
+  aggregateType String    @db.VarChar(100)
+  aggregateId   String    @db.VarChar(100)
+  eventType     String    @db.VarChar(100)
+  payload       Json
+  timestamp     DateTime  @default(now())
+  published     Boolean   @default(false)
+  publishedAt   DateTime?
+  retryCount    Int       @default(0)
+  topic         String    @db.VarChar(120)
+  component     String    @db.VarChar(40) // "immediate" | "durable"
+  @@index([published, timestamp])
+  @@index([topic, published])
+}
+
+model StorageConfig {
+  id                String   @id @default("singleton")
+  strategy          String   @default("local")
+  commissionPercent Float    @default(30)
+  updatedAt         DateTime @updatedAt
+}
+
+model CourseCooccurrence {
+  id         String   @id @default(cuid())
+  courseIdA  String   @db.VarChar(50)
+  courseIdB  String   @db.VarChar(50)
+  coCount    Int      @default(0)
+  jaccard    Float    @default(0)
+  updatedAt  DateTime @updatedAt
+  @@unique([courseIdA, courseIdB])
+  @@index([courseIdA, jaccard])
+  @@index([courseIdB, jaccard])
+}
+
+// ═══════════════════════════════════════════════════════
+// READ MODELS — DENORMALIZED (Projectors are the only writers)
+// ═══════════════════════════════════════════════════════
+model RmCourseCatalog {
+  id               String      @id
+  creatorId        String
+  creatorName      String      @db.VarChar(120)
+  title            String      @db.VarChar(200)
+  slug             String      @unique @db.VarChar(220)
+  description      String      @db.Text
+  thumbnailUrl     String?     @db.VarChar(500)
+  priceCents       Int
+  level            CourseLevel
+  category         String      @db.VarChar(80)
+  tags             String[]
+  language         String      @db.VarChar(10)
+  isFeatured       Boolean     @default(false)
+  status           CourseStatus
+  averageRating    Float       @default(0)
+  reviewCount      Int         @default(0)
+  enrollmentCount  Int         @default(0)
+  publishedAt      DateTime?
+  projectedAt      DateTime    @default(now())
+  @@index([category])
+  @@index([status])
+  @@index([enrollmentCount])
+}
+
+model RmRecommendationProfile {
+  userId               String    @id
+  categoryWeights      Json
+  levelWeights         Json
+  tagWeights           Json
+  languageScores       Json
+  priceTierPreference  String    @default("MID")
+  enrolledCourseIds    String[]
+  collaborativeIds     String[]
+  recommendedCourseIds String[]
+  lastComputedAt       DateTime?
+  dictionaryVersion    Int       @default(1)
+  projectedAt          DateTime  @default(now())
+}
+
+model RmUserLearningSnapshot {
+  userId                String    @id
+  enrolledCoursesCount  Int       @default(0)
+  completedCoursesCount Int       @default(0)
+  totalSpentCents       Int       @default(0)
+  lastActivityDate      DateTime?
+  projectedAt           DateTime  @default(now())
+}
+
+model RmNotificationInbox {
+  id          String           @id
+  userId      String
+  type        NotificationType
+  title       String           @db.VarChar(200)
+  message     String           @db.VarChar(1000)
+  isRead      Boolean          @default(false)
+  createdAt   DateTime
+  projectedAt DateTime         @default(now())
+  @@index([userId, isRead])
+}
+
+
+// ── Commerce (cart / wishlist / coupons / orders) ─────────────────────────
+// Plain id columns (no FK relations) keep these tables self-contained.
+model CartItem {
+  id        String   @id @default(cuid())
+  userId    String
+  courseId  String
+  createdAt DateTime @default(now())
+  @@unique([userId, courseId])
+  @@index([userId])
+}
+
+model WishlistItem {
+  id        String   @id @default(cuid())
+  userId    String
+  courseId  String
+  createdAt DateTime @default(now())
+  @@unique([userId, courseId])
+  @@index([userId])
+}
+
+// percentOff applies to every course in scope:
+//   courseId set            -> only that course
+//   creatorId set, no course-> all of that creator's courses
+//   neither (admin-created) -> platform-wide
+model Coupon {
+  id         String    @id @default(cuid())
+  code       String    @unique @db.VarChar(40)
+  percentOff Int
+  creatorId  String?
+  courseId   String?
+  maxUses    Int?
+  usedCount  Int       @default(0)
+  expiresAt  DateTime?
+  isActive   Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  @@index([creatorId])
+  @@index([courseId])
+}
+
+// One checkout = one Order = one Payment per purchased course.
+model Order {
+  id              String        @id @default(cuid())
+  userId          String
+  status          PaymentStatus @default(PENDING)
+  subtotalCents   Int
+  discountCents   Int           @default(0)
+  totalCents      Int
+  currency        String        @db.VarChar(3) @default("usd")
+  couponCode      String?       @db.VarChar(40)
+  stripeSessionId String?       @unique
+  paidAt          DateTime?
+  createdAt       DateTime      @default(now())
+  @@index([userId])
+  @@index([status])
+}

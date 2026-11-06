@@ -1,0 +1,1 @@
+MultiHub static asset test file — reachable at http://localhost:8088/static/hello.txt
