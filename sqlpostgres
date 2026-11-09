@@ -1,0 +1,1620 @@
+# Master Prompt: Complete SQL + Prisma ORM Reference PDF for Node.js Developers
+
+Act as a senior database engineer, SQL educator, Prisma ORM expert, and technical documentation designer.
+
+Your task is to create a **comprehensive, professionally designed, downloadable PDF reference guide covering SQL and its equivalent Prisma ORM operations using TypeScript in Node.js applications.**
+
+This should be a complete technical reference, not a short tutorial or a collection of basic SQL examples.
+
+The document must make it easy to understand:
+
+1. How to perform database operations using raw SQL.
+    
+2. How to perform the exact same operations using Prisma ORM and TypeScript.
+    
+3. How SQL commands and Prisma operations correspond to one another.
+    
+4. The correct logical order of database creation, schema definition, relationships, queries, modifications, and database management.
+    
+
+---
+
+# 1. Document Layout and Design Requirements
+
+**Page configuration:**
+
+- Paper: A4.
+    
+- Orientation: Landscape.
+    
+- Layout: Exactly THREE columns per page.
+    
+- Use the available horizontal space efficiently.
+    
+- Consistent margins and column spacing.
+    
+- Avoid unnecessary whitespace.
+    
+- Maintain readable font sizes.
+    
+- Use page numbers and section identifiers.
+    
+- Add headers and footers with the document title and section name.
+    
+
+**Syntax highlighting:**
+
+Use professional, consistent syntax highlighting for both SQL and TypeScript.
+
+SQL highlighting:
+
+- Keywords: Blue or purple.
+    
+- Strings: Green.
+    
+- Numbers: Orange.
+    
+- Comments: Gray.
+    
+- Database objects and identifiers: Dark contrasting color.
+    
+
+TypeScript/Prisma highlighting:
+
+- Keywords: Purple.
+    
+- Strings: Green.
+    
+- Types and interfaces: Blue.
+    
+- Functions and methods: Cyan.
+    
+- Variables: Dark contrasting color.
+    
+- Comments: Gray.
+    
+
+Use monospaced fonts for all code.
+
+**Three-column organization:**
+
+Use the columns intelligently:
+
+- Column 1: SQL command and explanation.
+    
+- Column 2: Equivalent Prisma TypeScript implementation.
+    
+- Column 3: Additional notes, relationships, constraints, important variations, and practical examples.
+    
+
+Do not shrink code excessively to fit the columns. Continue to the next page when necessary.
+
+Use section headings, subtle separators, callouts for important concepts, and consistent code blocks.
+
+The final PDF must be printable and suitable for technical study and quick reference.
+
+---
+
+# 2. Database Technology and Environment
+
+Use the following environment throughout the document:
+
+- Database: PostgreSQL.
+    
+- Backend: Node.js.
+    
+- Programming language: TypeScript.
+    
+- ORM: Prisma ORM.
+    
+- SQL dialect: PostgreSQL.
+    
+- Prisma Client: Current stable Prisma API conventions.
+    
+- Database access: Prisma Client.
+    
+
+Use the following TypeScript import convention where appropriate:
+
+```
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
+```
+
+If current Prisma versions use a different generated-client import convention, explain it and consistently use one valid version throughout the document.
+
+Important:
+
+- Clearly distinguish PostgreSQL-specific SQL from standard SQL.
+    
+- Identify Prisma operations that have no direct one-to-one SQL equivalent.
+    
+- Explain when raw SQL is required instead of Prisma Client.
+    
+- Use realistic examples and consistent database/table/model names.
+    
+
+---
+
+# 3. Organize Everything in Logical Database Operation Order
+
+The document must follow the actual database development lifecycle.
+
+Do not arrange SQL alphabetically.
+
+For every major SQL command, show its equivalent Prisma operation or explain why no direct Prisma equivalent exists.
+
+Follow this exact overall structure.
+
+## PART 1: Database Fundamentals
+
+Cover:
+
+- What is SQL?
+    
+- What is a relational database?
+    
+- What is PostgreSQL?
+    
+- What is a schema?
+    
+- What is a table?
+    
+- What is a row and column?
+    
+- Primary keys.
+    
+- Foreign keys.
+    
+- Unique constraints.
+    
+- NOT NULL constraints.
+    
+- Default values.
+    
+- Relationships: one-to-one, one-to-many, many-to-many.
+    
+- Indexes.
+    
+- Transactions.
+    
+- SQL versus Prisma ORM.
+    
+- Prisma Schema versus PostgreSQL schema.
+    
+- Prisma Client versus raw SQL.
+    
+
+Include a simple relational database diagram.
+
+## PART 2: Database Creation and Management (DDL)
+
+Present commands in their proper order.
+
+Cover:
+
+1. CREATE DATABASE
+    
+2. ALTER DATABASE
+    
+3. DROP DATABASE
+    
+4. CREATE SCHEMA
+    
+5. ALTER SCHEMA
+    
+6. DROP SCHEMA
+    
+7. SET SCHEMA / search_path
+    
+8. CREATE TABLE
+    
+9. ALTER TABLE
+    
+10. DROP TABLE
+    
+11. TRUNCATE TABLE
+    
+12. RENAME TABLE
+    
+13. CREATE TEMPORARY TABLE
+    
+
+For each command provide:
+
+- SQL syntax.
+    
+- Practical SQL example.
+    
+- Purpose.
+    
+- Equivalent Prisma approach.
+    
+- Whether the operation requires Prisma Migrate, Prisma Schema changes, raw SQL, or database administration tooling.
+    
+
+Important: Prisma does not provide a normal Prisma Client method for creating and dropping databases. Explain the distinction.
+
+## PART 3: Data Types
+
+Cover PostgreSQL data types and their corresponding Prisma types.
+
+Include:
+
+- SMALLINT
+    
+- INTEGER
+    
+- BIGINT
+    
+- DECIMAL / NUMERIC
+    
+- REAL
+    
+- DOUBLE PRECISION
+    
+- VARCHAR
+    
+- CHAR
+    
+- TEXT
+    
+- BOOLEAN
+    
+- DATE
+    
+- TIME
+    
+- TIMESTAMP
+    
+- TIMESTAMPTZ
+    
+- UUID
+    
+- JSON
+    
+- JSONB
+    
+- BYTEA
+    
+- ENUM
+    
+- ARRAY
+    
+- SERIAL
+    
+- BIGSERIAL
+    
+
+Provide a comparison table:
+
+| PostgreSQL Type | Prisma Type | TypeScript Representation | Notes |
+
+Explain:
+
+- @id
+    
+- @default()
+    
+- @unique
+    
+- @updatedAt
+    
+- @map
+    
+- @@map
+    
+- @db annotations
+    
+- Native PostgreSQL types.
+    
+
+## PART 4: Table Creation and Relationships
+
+This is an especially important section.
+
+Show how to create tables with:
+
+- Primary keys.
+    
+- Foreign keys.
+    
+- Composite primary keys.
+    
+- Composite unique constraints.
+    
+- NOT NULL.
+    
+- UNIQUE.
+    
+- DEFAULT.
+    
+- CHECK constraints.
+    
+- Foreign key cascading.
+    
+- ON DELETE CASCADE.
+    
+- ON DELETE SET NULL.
+    
+- ON UPDATE CASCADE.
+    
+
+Explain all major foreign key concepts.
+
+Use a consistent example:
+
+User:
+
+- id
+    
+- name
+    
+- email
+    
+
+Post:
+
+- id
+    
+- title
+    
+- content
+    
+- authorId
+    
+
+Comment:
+
+- id
+    
+- content
+    
+- postId
+    
+- authorId
+    
+
+Category:
+
+- id
+    
+- name
+    
+
+PostCategory:
+
+- postId
+    
+- categoryId
+    
+
+Demonstrate:
+
+1. One-to-one.
+    
+2. One-to-many.
+    
+3. Many-to-many.
+    
+4. Explicit join tables.
+    
+5. Implicit many-to-many relationships in Prisma.
+    
+6. Self-relations.
+    
+7. Optional relationships.
+    
+8. Required relationships.
+    
+9. Referential actions.
+    
+
+For every relationship, show both the PostgreSQL foreign key SQL and the complete equivalent Prisma schema.
+
+Explain that Prisma relation fields are not physical database columns, whereas scalar foreign-key fields such as `authorId` represent actual columns.
+
+## PART 5: CRUD Operations (DML)
+
+This is the most important practical reference section.
+
+For EVERY operation, show SQL first and the equivalent Prisma TypeScript query immediately afterward.
+
+### A. INSERT
+
+Cover:
+
+- INSERT INTO.
+    
+- Insert one row.
+    
+- Insert multiple rows.
+    
+- INSERT with selected columns.
+    
+- INSERT with DEFAULT VALUES.
+    
+- INSERT ... RETURNING.
+    
+- INSERT ... ON CONFLICT DO NOTHING.
+    
+- INSERT ... ON CONFLICT DO UPDATE.
+    
+- Upsert.
+    
+
+Prisma equivalents:
+
+- prisma.user.create()
+    
+- prisma.user.createMany()
+    
+- prisma.user.upsert()
+    
+
+Explain `skipDuplicates` and PostgreSQL-specific limitations.
+
+### B. SELECT
+
+Cover:
+
+- SELECT *
+    
+- SELECT specific columns.
+    
+- SELECT DISTINCT.
+    
+- WHERE.
+    
+- AND.
+    
+- OR.
+    
+- NOT.
+    
+- IN.
+    
+- NOT IN.
+    
+- BETWEEN.
+    
+- LIKE.
+    
+- ILIKE.
+    
+- IS NULL.
+    
+- IS NOT NULL.
+    
+- ORDER BY.
+    
+- ASC.
+    
+- DESC.
+    
+- LIMIT.
+    
+- OFFSET.
+    
+- FETCH FIRST.
+    
+- DISTINCT ON.
+    
+- RETURNING where applicable.
+    
+
+Prisma equivalents:
+
+- findUnique()
+    
+- findUniqueOrThrow()
+    
+- findFirst()
+    
+- findFirstOrThrow()
+    
+- findMany()
+    
+- select
+    
+- include
+    
+- where
+    
+- orderBy
+    
+- distinct
+    
+- take
+    
+- skip
+    
+
+Demonstrate nested filters and filtering related records.
+
+### C. UPDATE
+
+Cover:
+
+- UPDATE.
+    
+- SET.
+    
+- UPDATE multiple columns.
+    
+- UPDATE with WHERE.
+    
+- UPDATE ... RETURNING.
+    
+- UPDATE using another table.
+    
+- Conditional updates.
+    
+
+Prisma equivalents:
+
+- update()
+    
+- updateMany()
+    
+- updateManyAndReturn() where supported.
+    
+- increment.
+    
+- decrement.
+    
+- multiply.
+    
+- divide.
+    
+- set.
+    
+- connect.
+    
+- disconnect.
+    
+
+Explain atomic numeric updates.
+
+### D. DELETE
+
+Cover:
+
+- DELETE FROM.
+    
+- DELETE with WHERE.
+    
+- DELETE ... RETURNING.
+    
+- DELETE with USING.
+    
+- DELETE all rows.
+    
+
+Prisma equivalents:
+
+- delete()
+    
+- deleteMany()
+    
+
+Explain foreign key restrictions and cascading deletion.
+
+## PART 6: Filtering, Sorting, Pagination and Searching
+
+Show SQL and Prisma side by side.
+
+Cover:
+
+- AND / OR / NOT.
+    
+- IN / NOT IN.
+    
+- BETWEEN.
+    
+- LIKE / ILIKE.
+    
+- Case-insensitive searches.
+    
+- NULL checks.
+    
+- Nested conditions.
+    
+- Relation filters.
+    
+- Some, every, none.
+    
+- Pagination using LIMIT and OFFSET.
+    
+- Cursor-based pagination.
+    
+- Sorting by multiple columns.
+    
+- Searching JSON fields.
+    
+- Array filtering.
+    
+
+Explain:
+
+- Prisma `where`.
+    
+- Prisma `orderBy`.
+    
+- Prisma `skip`.
+    
+- Prisma `take`.
+    
+- Prisma `cursor`.
+    
+- Prisma `contains`.
+    
+- Prisma `startsWith`.
+    
+- Prisma `endsWith`.
+    
+
+## PART 7: Aggregate Functions and Grouping
+
+Cover:
+
+- COUNT()
+    
+- SUM()
+    
+- AVG()
+    
+- MIN()
+    
+- MAX()
+    
+- GROUP BY.
+    
+- HAVING.
+    
+- COUNT DISTINCT.
+    
+- Conditional aggregation.
+    
+- FILTER (WHERE ...).
+    
+- Window functions.
+    
+
+Prisma equivalents:
+
+- aggregate()
+    
+- count()
+    
+- groupBy()
+    
+
+Clearly identify which operations require `$queryRaw` or `$executeRaw`.
+
+## PART 8: SQL Joins and Prisma Relations
+
+Cover every major join:
+
+1. INNER JOIN.
+    
+2. LEFT JOIN.
+    
+3. RIGHT JOIN.
+    
+4. FULL OUTER JOIN.
+    
+5. CROSS JOIN.
+    
+6. SELF JOIN.
+    
+7. Multiple-table joins.
+    
+8. JOIN with multiple conditions.
+    
+9. JOIN with aggregation.
+    
+10. JOIN with subqueries.
+    
+
+For each:
+
+- Show realistic SQL.
+    
+- Show the closest equivalent Prisma query.
+    
+- Explain `include` and nested `select`.
+    
+- Explain relation filters.
+    
+- Explain when Prisma relation queries differ from SQL joins internally.
+    
+
+Do not falsely claim that Prisma's `include` always produces the same SQL join strategy.
+
+## PART 9: Subqueries, CTEs and Advanced SELECT
+
+Cover:
+
+- Scalar subqueries.
+    
+- Correlated subqueries.
+    
+- EXISTS.
+    
+- NOT EXISTS.
+    
+- IN subqueries.
+    
+- ANY.
+    
+- ALL.
+    
+- WITH (CTE).
+    
+- Recursive CTE.
+    
+- UNION.
+    
+- UNION ALL.
+    
+- INTERSECT.
+    
+- EXCEPT.
+    
+- CASE WHEN.
+    
+- COALESCE.
+    
+- NULLIF.
+    
+- CAST.
+    
+- PostgreSQL type casting.
+    
+
+Show Prisma equivalents where available.
+
+Where Prisma Client cannot directly express an operation, show a valid `$queryRaw` example with parameterized SQL.
+
+## PART 10: Indexes and Performance
+
+Cover:
+
+- CREATE INDEX.
+    
+- DROP INDEX.
+    
+- UNIQUE INDEX.
+    
+- Composite indexes.
+    
+- Partial indexes.
+    
+- Expression indexes.
+    
+- GIN indexes.
+    
+- GiST indexes.
+    
+- BRIN indexes.
+    
+- B-tree indexes.
+    
+- Indexing foreign keys.
+    
+- EXPLAIN.
+    
+- EXPLAIN ANALYZE.
+    
+- Query optimization.
+    
+- N+1 query problem.
+    
+- Connection pooling.
+    
+
+Prisma equivalents:
+
+- @@index
+    
+- @@unique
+    
+- @unique
+    
+- Index type configuration.
+    
+- Raw SQL migrations for unsupported index definitions.
+    
+
+Explain when an index belongs in `schema.prisma` and when custom migration SQL is necessary.
+
+## PART 11: Constraints and Data Integrity
+
+Cover:
+
+- PRIMARY KEY.
+    
+- FOREIGN KEY.
+    
+- UNIQUE.
+    
+- NOT NULL.
+    
+- CHECK.
+    
+- DEFAULT.
+    
+- EXCLUSION constraints.
+    
+- Composite constraints.
+    
+- Referential integrity.
+    
+- ON DELETE.
+    
+- ON UPDATE.
+    
+
+Show SQL and Prisma schema equivalents.
+
+Clearly mark features that need custom SQL migrations.
+
+## PART 12: Views, Materialized Views, Functions and Triggers
+
+Cover:
+
+- CREATE VIEW.
+    
+- DROP VIEW.
+    
+- CREATE MATERIALIZED VIEW.
+    
+- REFRESH MATERIALIZED VIEW.
+    
+- CREATE FUNCTION.
+    
+- CREATE PROCEDURE.
+    
+- CALL.
+    
+- CREATE TRIGGER.
+    
+- DROP TRIGGER.
+    
+- Stored procedures.
+    
+- PL/pgSQL basics.
+    
+
+Show raw SQL and explain how Prisma interacts with these features.
+
+Distinguish Prisma views support from ordinary Prisma models and explain limitations.
+
+## PART 13: Transactions and Concurrency
+
+Cover:
+
+- BEGIN.
+    
+- COMMIT.
+    
+- ROLLBACK.
+    
+- SAVEPOINT.
+    
+- ROLLBACK TO SAVEPOINT.
+    
+- RELEASE SAVEPOINT.
+    
+- Isolation levels.
+    
+- READ COMMITTED.
+    
+- REPEATABLE READ.
+    
+- SERIALIZABLE.
+    
+- Deadlocks.
+    
+- Row locking.
+    
+- SELECT FOR UPDATE.
+    
+- Optimistic concurrency control.
+    
+
+Prisma equivalents:
+
+- $transaction()
+    
+- Interactive transactions.
+    
+- Sequential transactions.
+    
+- Isolation level configuration.
+    
+- Raw SQL inside transactions.
+    
+
+Provide realistic Node.js TypeScript examples.
+
+## PART 14: Prisma-Specific Database Operations
+
+This section must explain Prisma concepts that do not have direct standalone SQL command equivalents.
+
+Cover:
+
+- prisma.user.create()
+    
+- prisma.user.createMany()
+    
+- prisma.user.findUnique()
+    
+- prisma.user.findFirst()
+    
+- prisma.user.findMany()
+    
+- prisma.user.update()
+    
+- prisma.user.updateMany()
+    
+- prisma.user.upsert()
+    
+- prisma.user.delete()
+    
+- prisma.user.deleteMany()
+    
+- prisma.user.count()
+    
+- prisma.user.aggregate()
+    
+- prisma.user.groupBy()
+    
+- prisma.$transaction()
+    
+- prisma.$connect()
+    
+- prisma.$disconnect()
+    
+- prisma.$queryRaw()
+    
+- prisma.$executeRaw()
+    
+- prisma.$extends()
+    
+
+Also cover:
+
+- select.
+    
+- include.
+    
+- connect.
+    
+- connectOrCreate.
+    
+- disconnect.
+    
+- set.
+    
+- create.
+    
+- createMany.
+    
+- update.
+    
+- updateMany.
+    
+- upsert.
+    
+- delete.
+    
+- deleteMany.
+    
+
+Explain nested writes and relational operations.
+
+## PART 15: Prisma Schema, Migrations and Database Synchronization
+
+Cover the complete Prisma workflow:
+
+1. Initialize Prisma.
+    
+2. Configure database connection.
+    
+3. Define models.
+    
+4. Define relationships.
+    
+5. Generate Prisma Client.
+    
+6. Create a development migration.
+    
+7. Apply migrations.
+    
+8. Deploy migrations in production.
+    
+9. Inspect migration status.
+    
+10. Reset development database.
+    
+11. Seed database.
+    
+12. Introspect an existing database.
+    
+13. Format schema.
+    
+14. Validate schema.
+    
+15. Generate Prisma Client.
+    
+
+Include commands such as:
+
+```
+npx prisma init
+npx prisma generate
+npx prisma migrate dev --name init
+npx prisma migrate deploy
+npx prisma migrate status
+npx prisma migrate reset
+npx prisma db seed
+npx prisma db pull
+npx prisma db push
+npx prisma format
+npx prisma validate
+```
+
+Explain the difference between:
+
+- migrate dev
+    
+- migrate deploy
+    
+- db push
+    
+- db pull
+    
+- migrate reset
+    
+- generate
+    
+
+Clearly distinguish development and production workflows.
+
+## PART 16: Raw SQL in Node.js with Prisma
+
+Show:
+
+- `$queryRaw`
+    
+- `$executeRaw`
+    
+- `$queryRawUnsafe`
+    
+- `$executeRawUnsafe`
+    
+
+Explain parameterized queries and SQL injection prevention.
+
+Show safe examples:
+
+```
+const users = await prisma.$queryRaw`
+  SELECT * FROM "User"
+  WHERE email = ${email}
+`;
+```
+
+Explain the difference between returning rows and executing commands.
+
+Demonstrate parameterized INSERT, UPDATE, DELETE and SELECT examples.
+
+---
+
+# 4. Mandatory SQL-to-Prisma Comparison Format
+
+Every major SQL operation must have an equivalent Prisma example wherever one exists.
+
+Use this consistent format:
+
+**Operation: Retrieve users with published posts**
+
+SQL:
+
+```
+SELECT u.id, u.name, p.title
+FROM "User" u
+INNER JOIN "Post" p
+ON u.id = p."authorId"
+WHERE p.published = TRUE
+ORDER BY u.name ASC;
+```
+
+Prisma TypeScript:
+
+```
+const users = await prisma.user.findMany({
+  where: {
+    posts: {
+      some: {
+        published: true,
+      },
+    },
+  },
+  select: {
+    id: true,
+    name: true,
+    posts: {
+      where: {
+        published: true,
+      },
+      select: {
+        title: true,
+      },
+    },
+  },
+  orderBy: {
+    name: 'asc',
+  },
+});
+```
+
+Explanation:
+
+- SQL INNER JOIN combines related rows.
+    
+- Prisma expresses the relationship using nested filters and selection.
+    
+- The returned object structure differs from flat SQL rows.
+    
+
+Follow this format throughout the reference.
+
+Do not just give a Prisma schema when a Prisma Client query is expected.
+
+Likewise, do not just provide a SQL command when an actual SQL example is needed.
+
+---
+
+# 5. Complete SQL Command Reference Checklist
+
+Ensure the guide does not miss important SQL statements.
+
+Include the following categories:
+
+**Database and schema**
+
+- CREATE DATABASE
+    
+- ALTER DATABASE
+    
+- DROP DATABASE
+    
+- CREATE SCHEMA
+    
+- ALTER SCHEMA
+    
+- DROP SCHEMA
+    
+
+**Tables**
+
+- CREATE TABLE
+    
+- ALTER TABLE
+    
+- DROP TABLE
+    
+- TRUNCATE TABLE
+    
+- RENAME
+    
+
+**Data manipulation**
+
+- INSERT
+    
+- SELECT
+    
+- UPDATE
+    
+- DELETE
+    
+- MERGE (explain PostgreSQL version support and limitations)
+    
+
+**Filtering and querying**
+
+- WHERE
+    
+- DISTINCT
+    
+- ORDER BY
+    
+- GROUP BY
+    
+- HAVING
+    
+- LIMIT
+    
+- OFFSET
+    
+- FETCH
+    
+- CASE
+    
+- EXISTS
+    
+- IN
+    
+- BETWEEN
+    
+- LIKE
+    
+- ILIKE
+    
+
+**Relationships**
+
+- JOIN
+    
+- INNER JOIN
+    
+- LEFT JOIN
+    
+- RIGHT JOIN
+    
+- FULL JOIN
+    
+- CROSS JOIN
+    
+- SELF JOIN
+    
+
+**Constraints**
+
+- PRIMARY KEY
+    
+- FOREIGN KEY
+    
+- UNIQUE
+    
+- NOT NULL
+    
+- CHECK
+    
+- DEFAULT
+    
+- REFERENCES
+    
+
+**Indexes**
+
+- CREATE INDEX
+    
+- DROP INDEX
+    
+- UNIQUE INDEX
+    
+- Composite indexes
+    
+- Partial indexes
+    
+
+**Advanced querying**
+
+- UNION
+    
+- UNION ALL
+    
+- INTERSECT
+    
+- EXCEPT
+    
+- WITH
+    
+- RECURSIVE
+    
+- Subqueries
+    
+- Window functions
+    
+- OVER
+    
+- PARTITION BY
+    
+- ROW_NUMBER
+    
+- RANK
+    
+- DENSE_RANK
+    
+- LAG
+    
+- LEAD
+    
+
+**Transactions**
+
+- BEGIN
+    
+- COMMIT
+    
+- ROLLBACK
+    
+- SAVEPOINT
+    
+- RELEASE SAVEPOINT
+    
+
+**Database objects**
+
+- CREATE VIEW
+    
+- CREATE MATERIALIZED VIEW
+    
+- CREATE FUNCTION
+    
+- CREATE PROCEDURE
+    
+- CREATE TRIGGER
+    
+- CREATE SEQUENCE
+    
+- DROP operations
+    
+
+**Database administration**
+
+- GRANT
+    
+- REVOKE
+    
+- CREATE ROLE
+    
+- ALTER ROLE
+    
+- DROP ROLE
+    
+- EXPLAIN
+    
+- EXPLAIN ANALYZE
+    
+- ANALYZE
+    
+- VACUUM
+    
+
+For administration commands, explain why Prisma Client generally does not replace PostgreSQL administration tools.
+
+---
+
+# 6. Special Requirement: SQL and Prisma in the Same Logical Order
+
+This is critical.
+
+The entire document must follow the progression of actual database work.
+
+For example:
+
+1. Create database.
+    
+2. Create schema.
+    
+3. Create tables.
+    
+4. Define columns.
+    
+5. Define data types.
+    
+6. Define primary keys.
+    
+7. Define foreign keys.
+    
+8. Define relationships.
+    
+9. Define constraints.
+    
+10. Insert data.
+    
+11. Retrieve data.
+    
+12. Filter data.
+    
+13. Join data.
+    
+14. Update data.
+    
+15. Delete data.
+    
+16. Aggregate data.
+    
+17. Create indexes.
+    
+18. Use advanced queries.
+    
+19. Manage transactions.
+    
+20. Manage database objects.
+    
+21. Manage migrations and production database changes.
+    
+
+For every step, place SQL first and its corresponding Prisma implementation immediately after it.
+
+Where Prisma has no direct equivalent, clearly state:
+
+**No direct Prisma Client equivalent — use Prisma Migrate, schema.prisma, PostgreSQL administration tools, or parameterized raw SQL as appropriate.**
+
+Do not invent equivalent Prisma methods.
+
+---
+
+# 7. Code Quality Requirements
+
+All examples must:
+
+- Be syntactically valid.
+    
+- Use consistent naming conventions.
+    
+- Use PostgreSQL-compatible SQL.
+    
+- Use valid Prisma schema syntax.
+    
+- Use valid TypeScript.
+    
+- Use realistic Node.js code.
+    
+- Include necessary imports where needed.
+    
+- Use parameterized raw SQL.
+    
+- Include appropriate error handling in important examples.
+    
+- Avoid deprecated APIs.
+    
+- Explain version-dependent behavior.
+    
+
+Use one consistent example database throughout the PDF.
+
+Use a college/course management system as the running example, including:
+
+- User
+    
+- Student
+    
+- Instructor
+    
+- Course
+    
+- Category
+    
+- Enrollment
+    
+- Lesson
+    
+- Assignment
+    
+- Submission
+    
+- Payment
+    
+
+This will make the SQL examples and Prisma relationships easier to connect.
+
+---
+
+# 8. Final Reference Tables
+
+At the end of the document, include:
+
+### A. SQL-to-Prisma Quick Reference
+
+| SQL Operation | SQL Syntax | Prisma Equivalent | Notes |
+
+### B. PostgreSQL-to-Prisma Data Type Mapping
+
+| PostgreSQL | Prisma | TypeScript | Notes |
+
+### C. SQL Relationship-to-Prisma Mapping
+
+| Relationship | PostgreSQL Foreign Key Structure | Prisma Schema |
+
+### D. SQL Constraints-to-Prisma Mapping
+
+| SQL Constraint | Prisma Syntax | Custom Migration Required? |
+
+### E. Prisma Client Quick Reference
+
+| Method | Purpose | Equivalent SQL Concept |
+
+### F. Database Development Lifecycle
+
+A concise ordered checklist of everything from database creation to production migration.
+
+### G. SQL Command Execution Order
+
+Explain the difference between:
+
+- Database development order.
+    
+- SQL statement execution order.
+    
+- Logical SELECT query processing order.
+    
+
+Include the logical SELECT processing order:
+
+1. FROM / JOIN
+    
+2. WHERE
+    
+3. GROUP BY
+    
+4. HAVING
+    
+5. SELECT
+    
+6. DISTINCT
+    
+7. ORDER BY
+    
+8. LIMIT / OFFSET
+    
+
+Explain that this is the logical processing model, not necessarily the physical execution order chosen by PostgreSQL's query planner.
+
+---
+
+# 9. PDF Production and Quality Assurance
+
+Generate the actual PDF file, not just Markdown or HTML.
+
+Before finalizing:
+
+1. Verify that the document uses A4 landscape dimensions.
+    
+2. Verify that each page uses exactly three columns.
+    
+3. Check code block wrapping.
+    
+4. Check that no code is clipped or cut off.
+    
+5. Verify syntax highlighting.
+    
+6. Verify page numbers.
+    
+7. Verify headings and section hierarchy.
+    
+8. Check that SQL and Prisma examples correspond correctly.
+    
+9. Check Prisma API and PostgreSQL syntax validity.
+    
+10. Ensure readable printing at normal A4 landscape size.
+    
+
+If the document becomes long, that is acceptable. Completeness and accuracy are more important than keeping the page count low.
+
+Do not omit important commands merely to reduce the PDF size.
+
+**Final deliverable:**
+
+- One complete PDF.
+    
+- A4 landscape.
+    
+- Three-column layout.
+    
+- Professional syntax highlighting.
+    
+- SQL and equivalent Prisma TypeScript examples side by side in logical order.
+    
+- Suitable for printing, revision, and use as a long-term developer reference.
+    
+
+Also provide the source document (HTML, Markdown, or another suitable editable format) alongside the PDF so that the reference can be maintained and expanded later.
